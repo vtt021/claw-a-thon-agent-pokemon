@@ -1,0 +1,14 @@
+HTTP/1.1 503 Service Temporarily Unavailable
+Date: Fri, 12 Jun 2026 06:33:13 GMT
+Content-Type: application/json; charset=utf-8
+Connection: keep-alive
+Content-Length: 113
+X-Kong-Response-Latency: 1
+Server: kong/3.9.1.2-enterprise-edition
+X-Kong-Request-Id: ba0721433c5379568f26d647d78fe119
+
+{
+  "message":"failure to get a peer from the ring-balancer",
+  "request_id":"ba0721433c5379568f26d647d78fe119"
+}
+HTTP_CODE:503

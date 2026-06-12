@@ -1,0 +1,72 @@
+{
+  "listData": [
+    {
+      "agentRuntimeId": "runtime-10068b92-efc1-4201-b98c-f3f6ffc5ecb5",
+      "version": 2,
+      "description": "",
+      "imageUrl": "vcr.vngcloud.vn/111480-abp111922/agent-bug--analys:v20260612125250",
+      "imageAuth": {
+        "enabled": true,
+        "useAgentBaseRegistryCredentials": false,
+        "username": "111480-gui111922"
+      },
+      "command": [],
+      "args": [],
+      "environmentVariables": {
+        "MODEL": "minimax/minimax-m2.5",
+        "BASE_URL": "https://maas-llm-aiplatform-hcm.api.vngcloud.vn/v1",
+        "OPENAI_API_KEY": "vn-T_-j0cnxp-6wGQz0eZV_aD_iAikfUp9a4fbe9032524ca78870fa976a645929LF9E58mB5-dA8gf-pQyhVw3UuvI7ZAF"
+      },
+      "networkConfig": {
+        "mode": "PUBLIC",
+        "vpcId": null,
+        "subnetId": null,
+        "routeCidrs": []
+      },
+      "flavorId": "runtime-s2-general-2x4",
+      "autoscaling": {
+        "minReplicas": 1,
+        "maxReplicas": 1,
+        "cpuUtilization": 50,
+        "memoryUtilization": 50
+      },
+      "createdAt": "2026-06-12T06:22:55.314+00:00"
+    },
+    {
+      "agentRuntimeId": "runtime-10068b92-efc1-4201-b98c-f3f6ffc5ecb5",
+      "version": 1,
+      "description": "agent-bug--analys",
+      "imageUrl": "vcr.vngcloud.vn/111480-abp111922/agent-bug--analys:v20260612125250",
+      "imageAuth": {
+        "enabled": true,
+        "useAgentBaseRegistryCredentials": false,
+        "username": "111480-gui111922"
+      },
+      "command": [],
+      "args": [],
+      "environmentVariables": {
+        "MODEL": "minimax/minimax-m2.5",
+        "BASE_URL": "https://maas-llm-aiplatform-hcm.api.vngcloud.vn/v1",
+        "OPENAI_API_KEY": "vn-T_-j0cnxp-6wGQz0eZV_aD_iAikfUp9a4fbe9032524ca78870fa976a645929LF9E58mB5-dA8gf-pQyhVw3UuvI7ZAF"
+      },
+      "networkConfig": {
+        "mode": "PUBLIC",
+        "vpcId": null,
+        "subnetId": null,
+        "routeCidrs": []
+      },
+      "flavorId": "runtime-s2-general-2x4",
+      "autoscaling": {
+        "minReplicas": 1,
+        "maxReplicas": 1,
+        "cpuUtilization": 50,
+        "memoryUtilization": 50
+      },
+      "createdAt": "2026-06-12T06:09:39.398+00:00"
+    }
+  ],
+  "page": 1,
+  "pageSize": 100,
+  "totalPage": 1,
+  "totalItem": 2
+}

@@ -1,0 +1,10 @@
+{
+  "id": "runtime-10068b92-efc1-4201-b98c-f3f6ffc5ecb5",
+  "name": "agent-bug--analys",
+  "description": null,
+  "status": "ERROR",
+  "statusReason": null,
+  "createdAt": "2026-06-12T06:09:39.398+00:00",
+  "updatedAt": "2026-06-12T06:28:04.368+00:00",
+  "poc": false
+}

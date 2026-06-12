@@ -1,0 +1,19 @@
+{
+  "listData": [
+    {
+      "id": "endpoint-2c40a4b5-bc48-4ad3-85ee-97b1742e9bb2",
+      "agentRuntimeId": "runtime-10068b92-efc1-4201-b98c-f3f6ffc5ecb5",
+      "name": "DEFAULT",
+      "version": 2,
+      "currentReplicaCount": 0,
+      "url": "https://endpoint-2c40a4b5-bc48-4ad3-85ee-97b1742e9bb2.agentbase-runtime.aiplatform.vngcloud.vn",
+      "status": "ERROR",
+      "createdAt": "2026-06-12T06:09:39.985+00:00",
+      "updatedAt": "2026-06-12T06:31:35.834+00:00"
+    }
+  ],
+  "page": 1,
+  "pageSize": 100,
+  "totalPage": 1,
+  "totalItem": 1
+}

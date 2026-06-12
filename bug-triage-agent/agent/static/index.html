@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bug Triage Agent</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0f1117;
+      --surface:   #181c27;
+      --border:    #272d3d;
+      --border-2:  #323848;
+      --text:      #e4e8f0;
+      --muted:     #7b839a;
+      --accent:    #4f7ef8;
+
+      --p1: #f05454; --p1-bg: #2a1515;
+      --p2: #f5a623; --p2-bg: #261d0a;
+      --p3: #4f7ef8; --p3-bg: #0e1a35;
+      --p4: #3fcf76; --p4-bg: #0c2217;
+
+      --critical: #f05454; --critical-bg: #2a1515;
+      --high:     #f5a623; --high-bg:     #261d0a;
+      --medium:   #4f7ef8; --medium-bg:   #0e1a35;
+      --low:      #3fcf76; --low-bg:      #0c2217;
+
+      --radius: 10px;
+      --radius-sm: 6px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 14px;
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    /* ── Layout ── */
+    .layout {
+      display: grid;
+      grid-template-columns: 380px 1fr;
+      min-height: 100vh;
+    }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      padding: 28px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 4px;
+    }
+    .logo-icon {
+      width: 36px; height: 36px;
+      background: linear-gradient(135deg, #4f7ef8, #7c5cf8);
+      border-radius: 9px;
+      display: grid; place-items: center;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+    .logo-text h1 { font-size: 16px; font-weight: 600; letter-spacing: -0.3px; }
+    .logo-text p  { font-size: 12px; color: var(--muted); }
+
+    .section-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    textarea, select, input {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 13px;
+      padding: 9px 11px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    textarea:focus, select:focus, input:focus { border-color: var(--accent); }
+    textarea { min-height: 120px; resize: vertical; line-height: 1.55; }
+    select option { background: var(--surface); }
+
+    .field { display: flex; flex-direction: column; gap: 6px; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+    .btn-analyze {
+      width: 100%;
+      padding: 11px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: opacity 0.15s, transform 0.1s;
+      margin-top: 4px;
+    }
+    .btn-analyze:hover:not(:disabled) { opacity: 0.88; }
+    .btn-analyze:active:not(:disabled) { transform: scale(0.98); }
+    .btn-analyze:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    .history-list { display: flex; flex-direction: column; gap: 6px; flex: 1; overflow-y: auto; }
+    .history-item {
+      padding: 9px 11px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: border-color 0.15s;
+    }
+    .history-item:hover { border-color: var(--border-2); }
+    .history-item.active { border-color: var(--accent); }
+    .history-item .hi-top {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 3px;
+    }
+    .history-item .hi-desc {
+      font-size: 12px; color: var(--muted);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .badge {
+      font-size: 11px; font-weight: 700; padding: 2px 7px;
+      border-radius: 4px; letter-spacing: 0.03em;
+    }
+    .badge.p1 { color: var(--p1); background: var(--p1-bg); }
+    .badge.p2 { color: var(--p2); background: var(--p2-bg); }
+    .badge.p3 { color: var(--p3); background: var(--p3-bg); }
+    .badge.p4 { color: var(--p4); background: var(--p4-bg); }
+    .badge.Critical { color: var(--critical); background: var(--critical-bg); }
+    .badge.High     { color: var(--high);     background: var(--high-bg); }
+    .badge.Medium   { color: var(--medium);   background: var(--medium-bg); }
+    .badge.Low      { color: var(--low);      background: var(--low-bg); }
+
+    /* ── Main panel ── */
+    .main {
+      padding: 36px 40px;
+      overflow-y: auto;
+    }
+
+    .empty-state {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      color: var(--muted);
+    }
+    .empty-state .es-icon { font-size: 48px; opacity: 0.3; }
+    .empty-state h2 { font-size: 18px; font-weight: 500; color: var(--text); opacity: 0.4; }
+    .empty-state p  { font-size: 13px; max-width: 300px; text-align: center; }
+
+    .result { display: none; animation: fadeIn 0.3s ease; }
+    .result.visible { display: block; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+    .result-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 28px;
+      gap: 16px;
+    }
+    .result-title { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+    .result-desc  { font-size: 16px; font-weight: 500; line-height: 1.4; }
+    .result-meta  { display: flex; gap: 6px; flex-shrink: 0; }
+
+    /* Score cards */
+    .score-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+    .score-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+    }
+    .sc-label { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; }
+    .sc-value  { font-size: 28px; font-weight: 700; letter-spacing: -1px; margin-bottom: 4px; }
+    .sc-sublabel { font-size: 12px; color: var(--muted); margin-bottom: 14px; }
+    .sc-bar-bg   { height: 5px; background: var(--border); border-radius: 99px; overflow: hidden; }
+    .sc-bar-fill { height: 100%; border-radius: 99px; transition: width 0.6s cubic-bezier(0.4,0,0.2,1); }
+    .sc-score    { font-size: 11px; color: var(--muted); margin-top: 6px; }
+
+    /* Info cards */
+    .info-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    .ic-title {
+      font-size: 12px; font-weight: 600; letter-spacing: 0.06em;
+      text-transform: uppercase; color: var(--muted);
+      margin-bottom: 12px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .ic-text { font-size: 14px; line-height: 1.65; color: var(--text); }
+
+    .tag-row { display: flex; flex-wrap: wrap; gap: 7px; }
+    .tag {
+      font-size: 12px; padding: 4px 10px;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 99px; color: var(--muted);
+    }
+
+    .action-list { list-style: none; }
+    .action-list li {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+    }
+    .action-list li:last-child { border-bottom: none; padding-bottom: 0; }
+    .action-num {
+      width: 20px; height: 20px; border-radius: 50%;
+      background: var(--border); color: var(--muted);
+      font-size: 11px; font-weight: 700;
+      display: grid; place-items: center; flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    /* Confidence */
+    .conf-row { display: flex; align-items: center; gap: 12px; }
+    .conf-bar-bg { flex: 1; height: 5px; background: var(--border); border-radius: 99px; overflow: hidden; }
+    .conf-bar-fill { height: 100%; background: var(--accent); border-radius: 99px; transition: width 0.6s; }
+    .conf-val { font-size: 13px; font-weight: 600; color: var(--text); min-width: 36px; text-align: right; }
+
+    /* Loading */
+    .loading {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      padding: 80px 20px;
+      color: var(--muted);
+    }
+    .loading.visible { display: flex; }
+    .spinner {
+      width: 36px; height: 36px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading p { font-size: 14px; }
+
+    /* Error */
+    .error-box {
+      display: none;
+      background: var(--p1-bg); border: 1px solid var(--p1);
+      border-radius: var(--radius); padding: 16px 20px;
+      color: var(--p1); font-size: 13px; margin-bottom: 20px;
+    }
+    .error-box.visible { display: block; }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .layout { grid-template-columns: 1fr; }
+      .sidebar { position: static; height: auto; }
+      .main { padding: 24px 20px; }
+      .score-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="layout">
+  <!-- ── Sidebar: Input form + history ── -->
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-icon">🐛</div>
+      <div class="logo-text">
+        <h1>Bug Triage Agent</h1>
+        <p>AI-powered priority analysis</p>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-label">Mô tả bug</div>
+      <div class="field">
+        <textarea id="desc" placeholder="Mô tả chi tiết bug, bao gồm: triệu chứng, bước tái hiện, màn hình/tính năng bị ảnh hưởng..."></textarea>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-label">Thông tin thêm</div>
+      <div class="grid-2">
+        <div class="field">
+          <label style="font-size:12px;color:var(--muted);">Môi trường</label>
+          <select id="env">
+            <option value="">Không rõ</option>
+            <option value="production">Production</option>
+            <option value="staging">Staging</option>
+            <option value="development">Development</option>
+            <option value="all">Tất cả</option>
+          </select>
+        </div>
+        <div class="field">
+          <label style="font-size:12px;color:var(--muted);">Tần suất</label>
+          <select id="freq">
+            <option value="">Không rõ</option>
+            <option value="always">Luôn luôn</option>
+            <option value="often">Thường xuyên</option>
+            <option value="sometimes">Đôi khi</option>
+            <option value="rare">Hiếm khi</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;">
+        <div class="field">
+          <label style="font-size:12px;color:var(--muted);">Người dùng ảnh hưởng</label>
+          <input id="affected" type="text" placeholder="VD: all users" />
+        </div>
+        <div class="field">
+          <label style="font-size:12px;color:var(--muted);">Component</label>
+          <input id="component" type="text" placeholder="VD: auth, payment" />
+        </div>
+      </div>
+    </div>
+
+    <button class="btn-analyze" id="analyzeBtn" onclick="analyze()">
+      <span id="btnIcon">⚡</span>
+      <span id="btnText">Phân tích bug</span>
+    </button>
+
+    <!-- History -->
+    <div style="flex:1;display:flex;flex-direction:column;gap:8px;overflow:hidden;">
+      <div class="section-label" id="histLabel" style="display:none;">Lịch sử phân tích</div>
+      <div class="history-list" id="histList"></div>
+    </div>
+  </aside>
+
+  <!-- ── Main: Result panel ── -->
+  <main class="main" id="mainPanel">
+
+    <div class="empty-state" id="emptyState">
+      <div class="es-icon">🔍</div>
+      <h2>Chưa có kết quả</h2>
+      <p>Nhập mô tả bug và nhấn "Phân tích bug" để AI đánh giá priority và severity.</p>
+    </div>
+
+    <div class="loading" id="loadingState">
+      <div class="spinner"></div>
+      <p id="loadingText">Đang phân tích bug...</p>
+    </div>
+
+    <div class="error-box" id="errorBox"></div>
+
+    <div class="result" id="resultPanel">
+
+      <div class="result-header">
+        <div>
+          <div class="result-title">Bug Report</div>
+          <div class="result-desc" id="rDesc"></div>
+        </div>
+        <div class="result-meta">
+          <span class="badge" id="rPriority"></span>
+          <span class="badge" id="rSeverity"></span>
+        </div>
+      </div>
+
+      <!-- Score cards -->
+      <div class="score-grid">
+        <div class="score-card">
+          <div class="sc-label">Priority</div>
+          <div class="sc-value" id="sPriority"></div>
+          <div class="sc-sublabel" id="sPriorityLabel"></div>
+          <div class="sc-bar-bg"><div class="sc-bar-fill" id="sPriorityBar"></div></div>
+          <div class="sc-score" id="sPriorityScore"></div>
+        </div>
+        <div class="score-card">
+          <div class="sc-label">Severity</div>
+          <div class="sc-value" id="sSeverity"></div>
+          <div class="sc-sublabel" id="sSeverityLabel"></div>
+          <div class="sc-bar-bg"><div class="sc-bar-fill" id="sSeverityBar"></div></div>
+          <div class="sc-score" id="sSeverityScore"></div>
+        </div>
+      </div>
+
+      <!-- Confidence -->
+      <div class="info-card" style="margin-bottom:16px;">
+        <div class="ic-title">Độ tin cậy</div>
+        <div class="conf-row">
+          <div class="conf-bar-bg"><div class="conf-bar-fill" id="sConfBar"></div></div>
+          <div class="conf-val" id="sConf"></div>
+        </div>
+      </div>
+
+      <!-- Reason -->
+      <div class="info-card">
+        <div class="ic-title">📋 Lý do đánh giá</div>
+        <div class="ic-text" id="sReason"></div>
+      </div>
+
+      <!-- Factors -->
+      <div class="info-card">
+        <div class="ic-title">🏷 Yếu tố ảnh hưởng</div>
+        <div class="tag-row" id="sFactors"></div>
+      </div>
+
+      <!-- Actions -->
+      <div class="info-card">
+        <div class="ic-title">✅ Hành động đề xuất</div>
+        <ul class="action-list" id="sActions"></ul>
+      </div>
+
+    </div><!-- /result -->
+  </main>
+</div>
+
+<script>
+  const PRIORITY_COLORS = { P1: '#f05454', P2: '#f5a623', P3: '#4f7ef8', P4: '#3fcf76' };
+  const SEVERITY_COLORS = { Critical: '#f05454', High: '#f5a623', Medium: '#4f7ef8', Low: '#3fcf76' };
+
+  let history = [];
+  let analyzing = false;
+
+  const loadingMessages = [
+    'Đang phân tích bug...', 'Đánh giá mức độ ảnh hưởng...',
+    'Xác định priority...', 'Tổng hợp kết quả...'
+  ];
+  let msgInterval;
+
+  function startLoadingMessages() {
+    let i = 0;
+    document.getElementById('loadingText').textContent = loadingMessages[0];
+    msgInterval = setInterval(() => {
+      i = (i + 1) % loadingMessages.length;
+      document.getElementById('loadingText').textContent = loadingMessages[i];
+    }, 2000);
+  }
+
+  function stopLoadingMessages() {
+    clearInterval(msgInterval);
+  }
+
+  async function analyze() {
+    if (analyzing) return;
+
+    const desc = document.getElementById('desc').value.trim();
+    if (!desc) { document.getElementById('desc').focus(); return; }
+
+    analyzing = true;
+    const btn = document.getElementById('analyzeBtn');
+    btn.disabled = true;
+    document.getElementById('btnText').textContent = 'Đang phân tích...';
+
+    document.getElementById('emptyState').style.display = 'none';
+    document.getElementById('resultPanel').classList.remove('visible');
+    document.getElementById('errorBox').classList.remove('visible');
+    document.getElementById('loadingState').classList.add('visible');
+    startLoadingMessages();
+
+    const payload = {
+      description:    desc,
+      environment:    document.getElementById('env').value || undefined,
+      frequency:      document.getElementById('freq').value || undefined,
+      affected_users: document.getElementById('affected').value.trim() || undefined,
+      component:      document.getElementById('component').value.trim() || undefined,
+    };
+
+    try {
+      const res = await fetch('/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+
+      const data = await res.json();
+      renderResult(data, desc);
+      addHistory(data, desc);
+    } catch (e) {
+      showError(`Lỗi: ${e.message}`);
+    } finally {
+      stopLoadingMessages();
+      document.getElementById('loadingState').classList.remove('visible');
+      analyzing = false;
+      btn.disabled = false;
+      document.getElementById('btnText').textContent = 'Phân tích bug';
+    }
+  }
+
+  function renderResult(data, desc) {
+    // Header
+    document.getElementById('rDesc').textContent = desc.length > 120 ? desc.slice(0, 120) + '…' : desc;
+    const rp = document.getElementById('rPriority');
+    rp.textContent = data.priority;
+    rp.className = `badge ${data.priority}`;
+    const rs = document.getElementById('rSeverity');
+    rs.textContent = data.severity;
+    rs.className = `badge ${data.severity}`;
+
+    // Priority card
+    const pc = PRIORITY_COLORS[data.priority] || '#4f7ef8';
+    document.getElementById('sPriority').textContent = data.priority;
+    document.getElementById('sPriority').style.color = pc;
+    document.getElementById('sPriorityLabel').textContent = data.priority_label;
+    document.getElementById('sPriorityBar').style.width = data.priority_score + '%';
+    document.getElementById('sPriorityBar').style.background = pc;
+    document.getElementById('sPriorityScore').textContent = `Điểm: ${data.priority_score}/100`;
+
+    // Severity card
+    const sc = SEVERITY_COLORS[data.severity] || '#4f7ef8';
+    document.getElementById('sSeverity').textContent = data.severity;
+    document.getElementById('sSeverity').style.color = sc;
+    document.getElementById('sSeverityLabel').textContent = data.severity_label;
+    document.getElementById('sSeverityBar').style.width = data.severity_score + '%';
+    document.getElementById('sSeverityBar').style.background = sc;
+    document.getElementById('sSeverityScore').textContent = `Điểm: ${data.severity_score}/100`;
+
+    // Confidence
+    document.getElementById('sConf').textContent = data.confidence + '%';
+    document.getElementById('sConfBar').style.width = data.confidence + '%';
+
+    // Reason
+    document.getElementById('sReason').textContent = data.reason;
+
+    // Factors
+    document.getElementById('sFactors').innerHTML =
+      (data.factors || []).map(f => `<span class="tag">${f}</span>`).join('');
+
+    // Actions
+    document.getElementById('sActions').innerHTML =
+      (data.actions || []).map((a, i) =>
+        `<li><span class="action-num">${i+1}</span><span>${a}</span></li>`
+      ).join('');
+
+    document.getElementById('resultPanel').classList.add('visible');
+  }
+
+  function showError(msg) {
+    const box = document.getElementById('errorBox');
+    box.textContent = msg;
+    box.classList.add('visible');
+    document.getElementById('emptyState').style.display = 'none';
+  }
+
+  function addHistory(data, desc) {
+    history.unshift({ data, desc });
+    if (history.length > 20) history.pop();
+    renderHistory();
+  }
+
+  function renderHistory() {
+    const list = document.getElementById('histList');
+    const label = document.getElementById('histLabel');
+
+    if (!history.length) { label.style.display = 'none'; list.innerHTML = ''; return; }
+    label.style.display = 'block';
+
+    list.innerHTML = history.map((h, i) =>
+      `<div class="history-item ${i === 0 ? 'active' : ''}" onclick="loadHistory(${i})">
+        <div class="hi-top">
+          <span class="badge ${h.data.priority}">${h.data.priority}</span>
+          <span class="badge ${h.data.severity}">${h.data.severity}</span>
+        </div>
+        <div class="hi-desc">${h.desc.slice(0, 60)}${h.desc.length > 60 ? '…' : ''}</div>
+      </div>`
+    ).join('');
+  }
+
+  function loadHistory(idx) {
+    const h = history[idx];
+    if (!h) return;
+    document.getElementById('emptyState').style.display = 'none';
+    document.getElementById('loadingState').classList.remove('visible');
+    renderResult(h.data, h.desc);
+
+    // Mark active
+    document.querySelectorAll('.history-item').forEach((el, i) =>
+      el.classList.toggle('active', i === idx)
+    );
+  }
+
+  // Enter to submit (Ctrl/Cmd + Enter)
+  document.getElementById('desc').addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') analyze();
+  });
+</script>
+
+</body>
+</html>
