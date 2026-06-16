@@ -1,6 +1,8 @@
 # 🐛 Bug Triage Agent
 
-AI Agent sử dụng Claude để tự động đánh giá **Priority** và **Severity** của bug reports.
+AI Agent sử dụng **VNG Cloud AI Platform** (model Qwen) để tự động đánh giá **Priority** và **Severity** của bug reports.
+
+> Ghi chú: project ban đầu chạy trên Claude (Anthropic), sau đó đã chuyển sang VNG Cloud AI Platform qua client tương thích OpenAI.
 
 ## Cấu trúc project
 
@@ -27,13 +29,16 @@ pip install -r requirements.txt
 ### 2. Cấu hình API key
 
 ```bash
-export ANTHROPIC_API_KEY="sk-ant-..."
+export VNGCLOUD_API_KEY="vn-..."
 ```
 
 Hoặc tạo file `.env`:
 ```
-ANTHROPIC_API_KEY=sk-ant-...
+VNGCLOUD_API_KEY=vn-...
 ```
+
+> Agent gọi endpoint `https://maas-llm-aiplatform-hcm.api.vngcloud.vn/v1` (xem `agent/bug_agent.py`).
+> Đổi model bằng tham số `--model` (CLI) hoặc khi khởi tạo `BugTriageAgent(model=...)`.
 
 ---
 
@@ -100,16 +105,31 @@ Response:
   "priority": "P1",
   "priority_score": 95,
   "priority_label": "Khẩn cấp",
+  "priority_reason": "Ảnh hưởng 100% user trên production.",
   "severity": "Critical",
   "severity_score": 92,
   "severity_label": "Hệ thống ngừng hoạt động hoàn toàn",
+  "severity_reason": "Tính năng login core ngừng, không có workaround.",
   "reason": "...",
   "factors": ["Production environment", "100% users affected", "Core auth feature"],
   "actions": ["Rollback ngay lập tức", "..."],
+  "root_causes": [
+    {"cause": "Deploy gần đây gây regression ở auth", "check": "So sánh diff release, xem log deploy"},
+    {"cause": "Service xác thực / DB token down", "check": "Kiểm tra health check, connection pool"}
+  ],
+  "test_cases": {
+    "must_have":   ["Login bằng tài khoản hợp lệ phải thành công"],
+    "should_have": ["Login sai mật khẩu trả lỗi đúng", "Login trên iOS Safari"],
+    "regression":  ["Smoke test login tự động sau mỗi deploy"]
+  },
   "confidence": 95,
   "processing_time_ms": 1240
 }
 ```
+
+> Các trường mới: `priority_reason` / `severity_reason` (lý do phân loại riêng),
+> `root_causes` (nguyên nhân thường gặp + cách kiểm tra để trace bug),
+> `test_cases` (test case **must_have** / **should_have** / **regression** chống tái phát).
 
 #### Batch analysis
 
@@ -142,10 +162,19 @@ report = BugReport(
 
 result = agent.analyze(report)
 
-print(f"Priority: {result.priority} ({result.priority_label})")
-print(f"Severity: {result.severity} ({result.severity_label})")
+print(f"Priority: {result.priority} ({result.priority_label}) — {result.priority_reason}")
+print(f"Severity: {result.severity} ({result.severity_label}) — {result.severity_reason}")
 print(f"Reason: {result.reason}")
 print(f"Actions: {result.actions}")
+
+print("\nNguyên nhân để trace bug:")
+for rc in result.root_causes:
+    print(f"  - {rc['cause']}  (kiểm tra: {rc['check']})")
+
+print("\nTest case đề xuất:")
+for group in ("must_have", "should_have", "regression"):
+    for tc in result.test_cases.get(group, []):
+        print(f"  [{group}] {tc}")
 ```
 
 ---

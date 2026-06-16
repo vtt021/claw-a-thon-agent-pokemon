@@ -96,7 +96,36 @@ def print_result(result, report: BugReport):
     for i, a in enumerate(result.actions, 1):
         print(f"  {GREEN}{i}.{RESET} {a}")
 
+    # Root causes (nguyên nhân thường gặp để trace bug)
+    if result.root_causes:
+        print(f"\n{CYAN}{'─' * 56}{RESET}")
+        print(f"  {BOLD}Nguyên nhân thường gặp (để trace bug){RESET}\n")
+        for i, rc in enumerate(result.root_causes, 1):
+            cause = rc.get("cause", "")
+            check = rc.get("check", "")
+            print(f"  {YELLOW}{i}.{RESET} {cause}")
+            if check:
+                print(f"     {GRAY}↳ Kiểm tra: {check}{RESET}")
+
+    # Test cases đề xuất
+    tc = result.test_cases or {}
+    if any(tc.get(k) for k in ("must_have", "should_have", "regression")):
+        print(f"\n{CYAN}{'─' * 56}{RESET}")
+        print(f"  {BOLD}Test case đề xuất{RESET}\n")
+        _print_tc_group("Must have (bắt buộc verify fix)", tc.get("must_have"), RED)
+        _print_tc_group("Should have (nên test thêm)", tc.get("should_have"), YELLOW)
+        _print_tc_group("Regression (chống tái phát)", tc.get("regression"), GREEN)
+
     print(f"\n{CYAN}{'─' * 56}{RESET}\n")
+
+
+def _print_tc_group(title: str, cases, color: str):
+    if not cases:
+        return
+    print(f"  {color}{BOLD}{title}{RESET}")
+    for c in cases:
+        print(f"    {color}•{RESET} {c}")
+    print()
 
 
 # ─── Interactive mode ─────────────────────────────────────────────────────────
@@ -179,8 +208,8 @@ def main():
     )
     parser.add_argument(
         "--model", "-m",
-        default="claude-sonnet-4-6",
-        help="Claude model (mặc định: claude-sonnet-4-6)"
+        default="qwen/qwen3-5-27b",
+        help="Model trên VNG Cloud AI Platform (mặc định: qwen/qwen3-5-27b)"
     )
 
     args = parser.parse_args()
@@ -198,16 +227,20 @@ def main():
 
         if args.output == "json":
             print(json.dumps({
-                "priority":       result.priority,
-                "priority_score": result.priority_score,
-                "priority_label": result.priority_label,
-                "severity":       result.severity,
-                "severity_score": result.severity_score,
-                "severity_label": result.severity_label,
-                "reason":         result.reason,
-                "factors":        result.factors,
-                "actions":        result.actions,
-                "confidence":     result.confidence,
+                "priority":        result.priority,
+                "priority_score":  result.priority_score,
+                "priority_label":  result.priority_label,
+                "priority_reason": result.priority_reason,
+                "severity":        result.severity,
+                "severity_score":  result.severity_score,
+                "severity_label":  result.severity_label,
+                "severity_reason": result.severity_reason,
+                "reason":          result.reason,
+                "factors":         result.factors,
+                "actions":         result.actions,
+                "root_causes":     result.root_causes,
+                "test_cases":      result.test_cases,
+                "confidence":      result.confidence,
             }, ensure_ascii=False, indent=2))
         else:
             report = BugReport(**{k: v for k, v in data.items() if k in BugReport.__dataclass_fields__})
@@ -234,6 +267,7 @@ def main():
                 print(json.dumps({
                     "priority": result.priority, "severity": result.severity,
                     "reason": result.reason, "actions": result.actions,
+                    "root_causes": result.root_causes, "test_cases": result.test_cases,
                 }, ensure_ascii=False, indent=2))
             else:
                 report = BugReport(**{k: v for k, v in item.items() if k in BugReport.__dataclass_fields__})

@@ -49,7 +49,6 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 class BugReportRequest(BaseModel):
     description: str = Field(
         ...,
-        min_length=10,
         description="Mô tả chi tiết về bug",
         examples=["Người dùng không thể đăng nhập bằng Google OAuth trên iOS Safari"]
     )
@@ -78,6 +77,21 @@ class BugReportRequest(BaseModel):
         description="Tên người báo cáo",
         examples=["john@company.com"]
     )
+    platform: Optional[str] = Field(
+        None,
+        description="Platform xảy ra bug",
+        examples=["iOS", "Android", "Web", "iOS, Android"]
+    )
+    app_version: Optional[str] = Field(
+        None,
+        description="Phiên bản ứng dụng",
+        examples=["2.4.1", "3.0.0-beta"]
+    )
+    screenshots: Optional[list[str]] = Field(
+        None,
+        description="Danh sách ảnh màn hình dạng base64 data URL",
+        max_length=4,
+    )
 
     model_config = {
         "json_schema_extra": {
@@ -92,18 +106,33 @@ class BugReportRequest(BaseModel):
     }
 
 
+class RootCause(BaseModel):
+    cause: str
+    check: str = ""
+
+
+class TestCases(BaseModel):
+    must_have: list[str] = []
+    should_have: list[str] = []
+    regression: list[str] = []
+
+
 class TriageResponse(BaseModel):
     request_id: str
     timestamp: str
     priority: str
     priority_score: int
     priority_label: str
+    priority_reason: str = ""
     severity: str
     severity_score: int
     severity_label: str
+    severity_reason: str = ""
     reason: str
     factors: list[str]
     actions: list[str]
+    root_causes: list[RootCause] = []
+    test_cases: TestCases = TestCases()
     confidence: int
     processing_time_ms: int
 
@@ -160,6 +189,9 @@ def analyze_bug(request: BugReportRequest):
         affected_users = request.affected_users,
         component      = request.component,
         reporter       = request.reporter,
+        platform       = request.platform,
+        app_version    = request.app_version,
+        screenshots    = request.screenshots,
     )
 
     try:
@@ -175,12 +207,16 @@ def analyze_bug(request: BugReportRequest):
         priority          = result.priority,
         priority_score    = result.priority_score,
         priority_label    = result.priority_label,
+        priority_reason   = result.priority_reason,
         severity          = result.severity,
         severity_score    = result.severity_score,
         severity_label    = result.severity_label,
+        severity_reason   = result.severity_reason,
         reason            = result.reason,
         factors           = result.factors,
         actions           = result.actions,
+        root_causes       = result.root_causes,
+        test_cases        = result.test_cases,
         confidence        = result.confidence,
         processing_time_ms = elapsed_ms,
     )
@@ -252,12 +288,16 @@ def _process_batch(job_id: str, reports: list[BugReportRequest]):
                 priority           = result.priority,
                 priority_score     = result.priority_score,
                 priority_label     = result.priority_label,
+                priority_reason    = result.priority_reason,
                 severity           = result.severity,
                 severity_score     = result.severity_score,
                 severity_label     = result.severity_label,
+                severity_reason    = result.severity_reason,
                 reason             = result.reason,
                 factors            = result.factors,
                 actions            = result.actions,
+                root_causes        = result.root_causes,
+                test_cases         = result.test_cases,
                 confidence         = result.confidence,
                 processing_time_ms = elapsed_ms,
             ).model_dump())
