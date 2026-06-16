@@ -1,0 +1,30 @@
+[
+  {
+    "description": "Toàn bộ hệ thống thanh toán ngừng hoạt động sau deploy lúc 14:00. User không thể hoàn tất đơn hàng, lỗi 500 trên 100% giao dịch. Đang mất doanh thu mỗi phút.",
+    "environment": "production",
+    "frequency": "always",
+    "affected_users": "all users",
+    "component": "payment"
+  },
+  {
+    "description": "Nút export CSV trên trang báo cáo bị mờ và không click được đối với user có role 'viewer'. Admin vẫn export bình thường. User có thể dùng cách khác là download trực tiếp từ settings.",
+    "environment": "production",
+    "frequency": "always",
+    "affected_users": "viewer role (~200 users)",
+    "component": "reports"
+  },
+  {
+    "description": "Avatar của user hiển thị sai sau khi đổi ảnh đại diện. Phải reload trang mới thấy ảnh mới. Không ảnh hưởng chức năng nào.",
+    "environment": "production",
+    "frequency": "always",
+    "affected_users": "any user who updates avatar",
+    "component": "profile"
+  },
+  {
+    "description": "Dashboard bị trắng trên Firefox 120 khi window width < 768px. Trên Chrome và Safari hoạt động bình thường. Lỗi console: 'ResizeObserver loop limit exceeded'.",
+    "environment": "production",
+    "frequency": "always",
+    "affected_users": "Firefox mobile users (~5%)",
+    "component": "dashboard"
+  }
+]

@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bug Triage Agent</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%220%200%2064%2064%22%3E%3Crect%20width=%2264%22%20height=%2264%22%20rx=%2214%22%20fill=%22%230f1117%22/%3E%3Cellipse%20cx=%2244%22%20cy=%2252%22%20rx=%227.5%22%20ry=%226%22%20fill=%22%23c98f4e%22/%3E%3Ccircle%20cx=%2240%22%20cy=%2258%22%20r=%222.8%22%20fill=%22%23f0607a%22/%3E%3Ccircle%20cx=%2249%22%20cy=%2257%22%20r=%222.8%22%20fill=%22%23f0607a%22/%3E%3Cellipse%20cx=%2236%22%20cy=%2244%22%20rx=%228.5%22%20ry=%226.5%22%20fill=%22%23d09a58%22/%3E%3Ccircle%20cx=%2229%22%20cy=%2249%22%20r=%223.1%22%20fill=%22%23f0607a%22/%3E%3Ccircle%20cx=%2244%22%20cy=%2249%22%20r=%223.1%22%20fill=%22%23f0607a%22/%3E%3Cellipse%20cx=%2228%22%20cy=%2236%22%20rx=%229.5%22%20ry=%227%22%20fill=%22%23d8a160%22/%3E%3Ccircle%20cx=%2220%22%20cy=%2241%22%20r=%223.3%22%20fill=%22%23f0607a%22/%3E%3Ccircle%20cx=%2236%22%20cy=%2241%22%20r=%223.3%22%20fill=%22%23f0607a%22/%3E%3Cpath%20d=%22M28%202%20L22.5%2014%20L33.5%2014%20Z%22%20fill=%22%23efe7d6%22/%3E%3Ccircle%20cx=%2228%22%20cy=%2222%22%20r=%2213%22%20fill=%22%23e0a866%22/%3E%3Ccircle%20cx=%2218%22%20cy=%2225.5%22%20r=%223.6%22%20fill=%22%23f0607a%22/%3E%3Ccircle%20cx=%2238%22%20cy=%2225.5%22%20r=%223.6%22%20fill=%22%23f0607a%22/%3E%3Cpath%20d=%22M21%2022%20Q23.5%2018%2026%2022%22%20fill=%22none%22%20stroke=%22%23241608%22%20stroke-width=%222.2%22%20stroke-linecap=%22round%22/%3E%3Cpath%20d=%22M30%2022%20Q32.5%2018%2035%2022%22%20fill=%22none%22%20stroke=%22%23241608%22%20stroke-width=%222.2%22%20stroke-linecap=%22round%22/%3E%3Cpath%20d=%22M25.5%2027%20Q28%2029.5%2030.5%2027%22%20fill=%22none%22%20stroke=%22%23241608%22%20stroke-width=%222%22%20stroke-linecap=%22round%22/%3E%3C/svg%3E" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* Bôi đen / select text: chữ tối trên nền sáng để luôn đọc được */
+    ::selection    { background: #c7d4ff; color: #0f1117; }
+    ::-moz-selection { background: #c7d4ff; color: #0f1117; }
+
+    :root {
+      --bg:       #0f1117;
+      --surface:  #181c27;
+      --border:   #272d3d;
+      --border-2: #323848;
+      --text:     #e4e8f0;
+      --muted:    #7b839a;
+      --accent:   #4f7ef8;
+
+      --p1: #f05454; --p1-bg: #2a1515;
+      --p2: #f5a623; --p2-bg: #261d0a;
+      --p3: #4f7ef8; --p3-bg: #0e1a35;
+      --p4: #3fcf76; --p4-bg: #0c2217;
+
+      --critical: #f05454; --critical-bg: #2a1515;
+      --high:     #f5a623; --high-bg:     #261d0a;
+      --medium:   #4f7ef8; --medium-bg:   #0e1a35;
+      --low:      #3fcf76; --low-bg:      #0c2217;
+
+      --radius: 10px; --radius-sm: 6px;
+    }
+
+    body {
+      background: var(--bg); color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 14px; line-height: 1.6; min-height: 100vh;
+    }
+
+    .layout { display: grid; grid-template-columns: 400px 1fr; min-height: 100vh; }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      background: var(--surface); border-right: 1px solid var(--border);
+      padding: 24px 20px; display: flex; flex-direction: column; gap: 18px;
+      position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    }
+
+    .logo { display: flex; align-items: center; gap: 10px; }
+    .logo-icon {
+      width: 34px; height: 34px;
+      background: linear-gradient(135deg, #4f7ef8, #7c5cf8);
+      border-radius: 9px; display: grid; place-items: center; font-size: 17px; flex-shrink: 0;
+    }
+    .logo-text h1 { font-size: 15px; font-weight: 600; letter-spacing: -0.3px; }
+    .logo-text p  { font-size: 11px; color: var(--muted); }
+
+    .section-label {
+      font-size: 11px; font-weight: 600; letter-spacing: 0.08em;
+      text-transform: uppercase; color: var(--muted); margin-bottom: 6px;
+    }
+
+    textarea, select, input[type=text] {
+      width: 100%; background: var(--bg); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); color: var(--text);
+      font-family: inherit; font-size: 13px; padding: 8px 10px;
+      outline: none; transition: border-color 0.15s;
+    }
+    textarea:focus, select:focus, input[type=text]:focus { border-color: var(--accent); }
+    textarea { min-height: 100px; resize: vertical; line-height: 1.55; }
+    select option { background: var(--surface); }
+
+    .field { display: flex; flex-direction: column; gap: 5px; }
+    .field label { font-size: 11px; color: var(--muted); }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+
+    /* Platform toggle buttons */
+    .platform-btns { display: flex; gap: 6px; }
+    .plt-btn {
+      flex: 1; padding: 7px 4px; background: var(--bg);
+      border: 1px solid var(--border); border-radius: var(--radius-sm);
+      color: var(--muted); font-size: 12px; font-weight: 500;
+      cursor: pointer; text-align: center; transition: all 0.15s;
+      display: flex; align-items: center; justify-content: center; gap: 5px;
+    }
+    .plt-btn:hover { border-color: var(--border-2); color: var(--text); }
+    .plt-btn.active { border-color: var(--accent); color: var(--accent); background: var(--p3-bg); }
+
+    /* Screenshot upload */
+    .upload-zone {
+      border: 1px dashed var(--border-2);
+      border-radius: var(--radius-sm);
+      padding: 14px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+      position: relative;
+    }
+    .upload-zone:hover { border-color: var(--accent); background: rgba(79,126,248,0.04); }
+    .upload-zone.drag-over { border-color: var(--accent); background: rgba(79,126,248,0.08); }
+    .upload-zone input[type=file] {
+      position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+    }
+    .upload-icon { font-size: 22px; margin-bottom: 5px; }
+    .upload-text { font-size: 12px; color: var(--muted); }
+    .upload-text span { color: var(--accent); }
+
+    .preview-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 8px; }
+    .preview-item {
+      position: relative; border-radius: 5px; overflow: hidden;
+      aspect-ratio: 16/9; background: var(--bg); border: 1px solid var(--border);
+    }
+    .preview-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .preview-item .rm-btn {
+      position: absolute; top: 3px; right: 3px;
+      width: 18px; height: 18px; border-radius: 50%;
+      background: rgba(0,0,0,0.7); border: none; color: #fff;
+      font-size: 11px; cursor: pointer; display: grid; place-items: center; line-height: 1;
+    }
+    .preview-item .rm-btn:hover { background: var(--p1); }
+
+    .btn-analyze {
+      width: 100%; padding: 10px; background: var(--accent); color: #fff;
+      border: none; border-radius: var(--radius-sm); font-size: 14px; font-weight: 600;
+      cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;
+      transition: opacity 0.15s, transform 0.1s;
+    }
+    .btn-analyze:hover:not(:disabled) { opacity: 0.88; }
+    .btn-analyze:active:not(:disabled) { transform: scale(0.98); }
+    .btn-analyze:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    /* History */
+    .history-list { display: flex; flex-direction: column; gap: 6px; flex: 1; overflow-y: auto; }
+    .history-item {
+      padding: 8px 10px; background: var(--bg); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); cursor: pointer; transition: border-color 0.15s;
+    }
+    .history-item:hover { border-color: var(--border-2); }
+    .history-item.active { border-color: var(--accent); }
+    .history-item .hi-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px; }
+    .history-item .hi-desc { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .history-item .hi-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+    .badge { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 4px; letter-spacing: 0.03em; }
+    .badge.P1 { color: var(--p1); background: var(--p1-bg); }
+    .badge.P2 { color: var(--p2); background: var(--p2-bg); }
+    .badge.P3 { color: var(--p3); background: var(--p3-bg); }
+    .badge.P4 { color: var(--p4); background: var(--p4-bg); }
+    .badge.Critical { color: var(--critical); background: var(--critical-bg); }
+    .badge.High     { color: var(--high);     background: var(--high-bg); }
+    .badge.Medium   { color: var(--medium);   background: var(--medium-bg); }
+    .badge.Low      { color: var(--low);      background: var(--low-bg); }
+
+    /* ── Main panel ── */
+    .main { padding: 36px 40px; overflow-y: auto; }
+
+    .empty-state {
+      height: 100%; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 12px; color: var(--muted);
+    }
+    .empty-state .es-icon { font-size: 44px; opacity: 0.25; }
+    .empty-state h2 { font-size: 17px; font-weight: 500; color: var(--text); opacity: 0.35; }
+    .empty-state p  { font-size: 13px; max-width: 280px; text-align: center; }
+
+    .result { display: none; animation: fadeIn 0.3s ease; }
+    .result.visible { display: block; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+    .result-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 24px; gap: 16px; }
+    .result-title { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 5px; }
+    .result-desc  { font-size: 15px; font-weight: 500; line-height: 1.4; }
+    .result-meta-badges { display: flex; gap: 6px; flex-shrink: 0; }
+
+    /* Result meta row (platform / version / env) */
+    .result-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 20px; }
+    .result-tag {
+      font-size: 11px; padding: 3px 9px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 99px; color: var(--muted);
+      display: flex; align-items: center; gap: 4px;
+    }
+
+    /* Score cards */
+    .score-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px; }
+    .score-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; }
+    .sc-label    { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+    .sc-value    { font-size: 26px; font-weight: 700; letter-spacing: -1px; margin-bottom: 3px; }
+    .sc-sublabel { font-size: 12px; color: var(--muted); margin-bottom: 12px; }
+    .sc-bar-bg   { height: 5px; background: var(--border); border-radius: 99px; overflow: hidden; }
+    .sc-bar-fill { height: 100%; border-radius: 99px; transition: width 0.6s cubic-bezier(0.4,0,0.2,1); }
+    .sc-score    { font-size: 11px; color: var(--muted); margin-top: 6px; }
+
+    /* Info cards */
+    .info-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; margin-bottom: 14px; }
+    .ic-title { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+    .ic-text  { font-size: 14px; line-height: 1.65; color: var(--text); }
+
+    .tag-row { display: flex; flex-wrap: wrap; gap: 6px; }
+    .tag { font-size: 12px; padding: 4px 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 99px; color: var(--muted); }
+
+    .action-list { list-style: none; }
+    .action-list li { display: flex; align-items: flex-start; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+    .action-list li:last-child { border-bottom: none; padding-bottom: 0; }
+    .action-num { width: 20px; height: 20px; border-radius: 50%; background: var(--border); color: var(--muted); font-size: 11px; font-weight: 700; display: grid; place-items: center; flex-shrink: 0; margin-top: 1px; }
+
+    /* Reason riêng cho priority / severity trong score card */
+    .sc-reason { font-size: 11.5px; line-height: 1.5; color: var(--muted); margin-top: 8px; }
+
+    /* Root causes */
+    .rc-list { list-style: none; display: flex; flex-direction: column; gap: 12px; }
+    .rc-item { display: flex; gap: 10px; }
+    .rc-num { width: 20px; height: 20px; border-radius: 50%; background: var(--p2-bg); color: var(--p2); font-size: 11px; font-weight: 700; display: grid; place-items: center; flex-shrink: 0; margin-top: 1px; }
+    .rc-body { flex: 1; }
+    .rc-cause { font-size: 13.5px; color: var(--text); font-weight: 500; }
+    .rc-check { font-size: 12px; color: var(--muted); margin-top: 3px; }
+    .rc-check::before { content: "↳ "; color: var(--accent); }
+
+    /* Test cases */
+    .tc-group { margin-bottom: 14px; }
+    .tc-group:last-child { margin-bottom: 0; }
+    .tc-head { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; margin-bottom: 8px; }
+    .tc-pill { font-size: 10px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; padding: 2px 8px; border-radius: 99px; }
+    .tc-must  { color: var(--p1); } .tc-must .tc-pill  { background: var(--p1-bg); color: var(--p1); }
+    .tc-should{ color: var(--p2); } .tc-should .tc-pill{ background: var(--p2-bg); color: var(--p2); }
+    .tc-reg   { color: var(--p4); } .tc-reg .tc-pill   { background: var(--p4-bg); color: var(--p4); }
+    .tc-hint { font-size: 11px; color: var(--muted); font-weight: 400; }
+    .tc-list { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+    .tc-list li { display: flex; gap: 8px; font-size: 13px; line-height: 1.5; padding-left: 2px; }
+    .tc-list li::before { content: "▪"; color: var(--muted); flex-shrink: 0; }
+
+    .conf-row { display: flex; align-items: center; gap: 12px; }
+    .conf-bar-bg   { flex: 1; height: 5px; background: var(--border); border-radius: 99px; overflow: hidden; }
+    .conf-bar-fill { height: 100%; background: var(--accent); border-radius: 99px; transition: width 0.6s; }
+    .conf-val { font-size: 13px; font-weight: 600; color: var(--text); min-width: 36px; text-align: right; }
+
+    /* Screenshots in result */
+    .screenshot-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; }
+    .screenshot-grid img { width: 100%; border-radius: 6px; border: 1px solid var(--border); cursor: zoom-in; transition: opacity 0.15s; }
+    .screenshot-grid img:hover { opacity: 0.85; }
+
+    /* Lightbox */
+    .lightbox { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.88); z-index: 999; align-items: center; justify-content: center; }
+    .lightbox.visible { display: flex; }
+    .lightbox img { max-width: 90vw; max-height: 90vh; border-radius: 8px; }
+    .lightbox-close { position: absolute; top: 16px; right: 20px; font-size: 28px; color: #fff; cursor: pointer; opacity: 0.7; }
+    .lightbox-close:hover { opacity: 1; }
+
+    /* Loading */
+    .loading { display: none; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 80px 20px; color: var(--muted); }
+    .loading.visible { display: flex; }
+    .spinner { width: 34px; height: 34px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading p { font-size: 13px; }
+
+    .error-box { display: none; background: var(--p1-bg); border: 1px solid var(--p1); border-radius: var(--radius); padding: 14px 18px; color: var(--p1); font-size: 13px; margin-bottom: 18px; }
+    .error-box.visible { display: block; }
+
+    @media (max-width: 768px) {
+      .layout { grid-template-columns: 1fr; }
+      .sidebar { position: static; height: auto; }
+      .main { padding: 20px 16px; }
+      .score-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="layout">
+  <!-- ── Sidebar ── -->
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-icon"><svg viewBox="0 0 64 64" width="24" height="24" aria-label="Bug Triage logo"><ellipse cx="44" cy="52" rx="7.5" ry="6" fill="#c98f4e"/><circle cx="40" cy="58" r="2.8" fill="#f0607a"/><circle cx="49" cy="57" r="2.8" fill="#f0607a"/><ellipse cx="36" cy="44" rx="8.5" ry="6.5" fill="#d09a58"/><circle cx="29" cy="49" r="3.1" fill="#f0607a"/><circle cx="44" cy="49" r="3.1" fill="#f0607a"/><ellipse cx="28" cy="36" rx="9.5" ry="7" fill="#d8a160"/><circle cx="20" cy="41" r="3.3" fill="#f0607a"/><circle cx="36" cy="41" r="3.3" fill="#f0607a"/><path d="M28 2 L22.5 14 L33.5 14 Z" fill="#efe7d6"/><circle cx="28" cy="22" r="13" fill="#e0a866"/><circle cx="18" cy="25.5" r="3.6" fill="#f0607a"/><circle cx="38" cy="25.5" r="3.6" fill="#f0607a"/><path d="M21 22 Q23.5 18 26 22" fill="none" stroke="#241608" stroke-width="2.2" stroke-linecap="round"/><path d="M30 22 Q32.5 18 35 22" fill="none" stroke="#241608" stroke-width="2.2" stroke-linecap="round"/><path d="M25.5 27 Q28 29.5 30.5 27" fill="none" stroke="#241608" stroke-width="2" stroke-linecap="round"/></svg></div>
+      <div class="logo-text">
+        <h1>Bug Triage Agent</h1>
+        <p>AI-powered priority analysis</p>
+      </div>
+    </div>
+
+    <!-- Description -->
+    <div>
+      <div class="section-label">Mô tả bug</div>
+      <textarea id="desc" placeholder="Mô tả triệu chứng, bước tái hiện, tính năng bị ảnh hưởng..."></textarea>
+    </div>
+
+    <!-- Platform -->
+    <div>
+      <div class="section-label">Platform</div>
+      <div class="platform-btns">
+        <button class="plt-btn" data-val="iOS" onclick="togglePlatform(this)">
+          <span>🍎</span> iOS
+        </button>
+        <button class="plt-btn" data-val="Android" onclick="togglePlatform(this)">
+          <span>🤖</span> Android
+        </button>
+        <button class="plt-btn" data-val="Web" onclick="togglePlatform(this)">
+          <span>🌐</span> Web
+        </button>
+        <button class="plt-btn" data-val="Other" onclick="togglePlatform(this)">
+          <span>💻</span> Other
+        </button>
+      </div>
+    </div>
+
+    <!-- Version + Component -->
+    <div class="grid-2">
+      <div class="field">
+        <label>App Version</label>
+        <input type="text" id="version" placeholder="VD: 2.4.1" />
+      </div>
+      <div class="field">
+        <label>Component</label>
+        <input type="text" id="component" placeholder="VD: auth, payment" />
+      </div>
+    </div>
+
+    <!-- Env + Frequency -->
+    <div class="grid-2">
+      <div class="field">
+        <label>Môi trường</label>
+        <select id="env">
+          <option value="">Không rõ</option>
+          <option value="production">Production</option>
+          <option value="staging">Staging</option>
+          <option value="development">Development</option>
+          <option value="all">Tất cả</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Tần suất</label>
+        <select id="freq">
+          <option value="">Không rõ</option>
+          <option value="always">Luôn luôn</option>
+          <option value="often">Thường xuyên</option>
+          <option value="sometimes">Đôi khi</option>
+          <option value="rare">Hiếm khi</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Affected users -->
+    <div class="field">
+      <label>Người dùng bị ảnh hưởng</label>
+      <input type="text" id="affected" placeholder="VD: all users, admin only, ~500 users" />
+    </div>
+
+    <!-- Screenshot upload -->
+    <div>
+      <div class="section-label">Ảnh màn hình lỗi <span style="font-weight:400;text-transform:none;font-size:10px;">(tùy chọn, tối đa 4)</span></div>
+      <div class="upload-zone" id="uploadZone">
+        <input type="file" id="screenshotInput" accept="image/*" multiple onchange="handleFiles(this.files)" />
+        <div class="upload-icon">🖼️</div>
+        <div class="upload-text">Kéo thả hoặc <span>chọn ảnh</span></div>
+        <div class="upload-text" style="font-size:11px;margin-top:2px;">PNG, JPG, WebP — tối đa 4MB/ảnh</div>
+      </div>
+      <div class="preview-grid" id="previewGrid"></div>
+    </div>
+
+    <button class="btn-analyze" id="analyzeBtn" onclick="analyze()">
+      <span>⚡</span>
+      <span id="btnText">Phân tích bug</span>
+    </button>
+
+    <!-- History -->
+    <div style="flex:1;display:flex;flex-direction:column;gap:8px;overflow:hidden;min-height:0;">
+      <div class="section-label" id="histLabel" style="display:none;">Lịch sử</div>
+      <div class="history-list" id="histList"></div>
+    </div>
+  </aside>
+
+  <!-- ── Main panel ── -->
+  <main class="main" id="mainPanel">
+    <div class="empty-state" id="emptyState">
+      <div class="es-icon">🔍</div>
+      <h2>Chưa có kết quả</h2>
+      <p>Nhập mô tả bug và nhấn "Phân tích bug" để AI đánh giá priority và severity.</p>
+    </div>
+
+    <div class="loading" id="loadingState">
+      <div class="spinner"></div>
+      <p id="loadingText">Đang phân tích bug...</p>
+    </div>
+
+    <div class="error-box" id="errorBox"></div>
+
+    <div class="result" id="resultPanel">
+      <div class="result-header">
+        <div>
+          <div class="result-title">Bug Report</div>
+          <div class="result-desc" id="rDesc"></div>
+        </div>
+        <div class="result-meta-badges">
+          <span class="badge" id="rPriority"></span>
+          <span class="badge" id="rSeverity"></span>
+        </div>
+      </div>
+
+      <!-- Context tags -->
+      <div class="result-tags" id="rTags"></div>
+
+      <!-- Score cards -->
+      <div class="score-grid">
+        <div class="score-card">
+          <div class="sc-label">Priority</div>
+          <div class="sc-value" id="sPriority"></div>
+          <div class="sc-sublabel" id="sPriorityLabel"></div>
+          <div class="sc-bar-bg"><div class="sc-bar-fill" id="sPriorityBar"></div></div>
+          <div class="sc-score" id="sPriorityScore"></div>
+          <div class="sc-reason" id="sPriorityReason"></div>
+        </div>
+        <div class="score-card">
+          <div class="sc-label">Severity</div>
+          <div class="sc-value" id="sSeverity"></div>
+          <div class="sc-sublabel" id="sSeverityLabel"></div>
+          <div class="sc-bar-bg"><div class="sc-bar-fill" id="sSeverityBar"></div></div>
+          <div class="sc-score" id="sSeverityScore"></div>
+          <div class="sc-reason" id="sSeverityReason"></div>
+        </div>
+      </div>
+
+      <!-- Confidence -->
+      <div class="info-card">
+        <div class="ic-title">Độ tin cậy</div>
+        <div class="conf-row">
+          <div class="conf-bar-bg"><div class="conf-bar-fill" id="sConfBar"></div></div>
+          <div class="conf-val" id="sConf"></div>
+        </div>
+      </div>
+
+      <!-- Screenshots attached -->
+      <div class="info-card" id="screenshotCard" style="display:none;">
+        <div class="ic-title">🖼 Ảnh màn hình đính kèm</div>
+        <div class="screenshot-grid" id="sScreenshots"></div>
+      </div>
+
+      <!-- Reason -->
+      <div class="info-card">
+        <div class="ic-title">📋 Lý do đánh giá</div>
+        <div class="ic-text" id="sReason"></div>
+      </div>
+
+      <!-- Factors -->
+      <div class="info-card">
+        <div class="ic-title">🏷 Yếu tố ảnh hưởng</div>
+        <div class="tag-row" id="sFactors"></div>
+      </div>
+
+      <!-- Actions -->
+      <div class="info-card">
+        <div class="ic-title">✅ Hành động đề xuất</div>
+        <ul class="action-list" id="sActions"></ul>
+      </div>
+
+      <!-- Root causes -->
+      <div class="info-card" id="rootCauseCard" style="display:none;">
+        <div class="ic-title">🔍 Nguyên nhân thường gặp (để trace bug)</div>
+        <ul class="rc-list" id="sRootCauses"></ul>
+      </div>
+
+      <!-- Test cases -->
+      <div class="info-card" id="testCaseCard" style="display:none;">
+        <div class="ic-title">🧪 Test case đề xuất</div>
+        <div id="sTestCases"></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Lightbox -->
+<div class="lightbox" id="lightbox" onclick="closeLightbox()">
+  <span class="lightbox-close">✕</span>
+  <img id="lightboxImg" src="" alt="" />
+</div>
+
+<script>
+  const PRIORITY_COLORS = { P1:'#f05454', P2:'#f5a623', P3:'#4f7ef8', P4:'#3fcf76' };
+  const SEVERITY_COLORS = { Critical:'#f05454', High:'#f5a623', Medium:'#4f7ef8', Low:'#3fcf76' };
+
+  let history = [];
+  let analyzing = false;
+  let selectedPlatforms = [];
+  let attachedImages = []; // [{dataUrl, file}]
+
+  const loadingMessages = [
+    'Đang phân tích bug...', 'Đánh giá mức độ ảnh hưởng...',
+    'Xác định priority...', 'Tổng hợp kết quả...'
+  ];
+  let msgInterval;
+
+  // ── Platform toggle ──────────────────────────────────────────────────────
+  function togglePlatform(btn) {
+    const val = btn.dataset.val;
+    if (btn.classList.contains('active')) {
+      btn.classList.remove('active');
+      selectedPlatforms = selectedPlatforms.filter(p => p !== val);
+    } else {
+      btn.classList.add('active');
+      selectedPlatforms.push(val);
+    }
+  }
+
+  // ── Screenshot handling ──────────────────────────────────────────────────
+  function handleFiles(files) {
+    const remaining = 4 - attachedImages.length;
+    const toAdd = Array.from(files).slice(0, remaining);
+    toAdd.forEach(file => {
+      if (!file.type.startsWith('image/')) return;
+      if (file.size > 4 * 1024 * 1024) { alert(`${file.name} vượt quá 4MB`); return; }
+      const reader = new FileReader();
+      reader.onload = e => {
+        attachedImages.push({ dataUrl: e.target.result, name: file.name });
+        renderPreviews();
+      };
+      reader.readAsDataURL(file);
+    });
+    // Reset input so same file can be re-added after removal
+    document.getElementById('screenshotInput').value = '';
+  }
+
+  function renderPreviews() {
+    const grid = document.getElementById('previewGrid');
+    grid.innerHTML = attachedImages.map((img, i) => `
+      <div class="preview-item">
+        <img src="${img.dataUrl}" alt="screenshot ${i+1}" />
+        <button class="rm-btn" onclick="removeImage(${i})">✕</button>
+      </div>
+    `).join('');
+  }
+
+  function removeImage(idx) {
+    attachedImages.splice(idx, 1);
+    renderPreviews();
+  }
+
+  // Drag and drop
+  const uploadZone = document.getElementById('uploadZone');
+  uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
+  uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
+  uploadZone.addEventListener('drop', e => {
+    e.preventDefault();
+    uploadZone.classList.remove('drag-over');
+    handleFiles(e.dataTransfer.files);
+  });
+
+  // ── Lightbox ─────────────────────────────────────────────────────────────
+  function openLightbox(src) {
+    document.getElementById('lightboxImg').src = src;
+    document.getElementById('lightbox').classList.add('visible');
+  }
+  function closeLightbox() {
+    document.getElementById('lightbox').classList.remove('visible');
+  }
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
+
+  // ── Loading messages ──────────────────────────────────────────────────────
+  function startLoadingMessages() {
+    let i = 0;
+    document.getElementById('loadingText').textContent = loadingMessages[0];
+    msgInterval = setInterval(() => {
+      i = (i + 1) % loadingMessages.length;
+      document.getElementById('loadingText').textContent = loadingMessages[i];
+    }, 2000);
+  }
+  function stopLoadingMessages() { clearInterval(msgInterval); }
+
+  // ── Analyze ───────────────────────────────────────────────────────────────
+  async function analyze() {
+    if (analyzing) return;
+    const desc = document.getElementById('desc').value.trim();
+    if (!desc) { document.getElementById('desc').focus(); return; }
+
+    analyzing = true;
+    const btn = document.getElementById('analyzeBtn');
+    btn.disabled = true;
+    document.getElementById('btnText').textContent = 'Đang phân tích...';
+    document.getElementById('emptyState').style.display = 'none';
+    document.getElementById('resultPanel').classList.remove('visible');
+    document.getElementById('errorBox').classList.remove('visible');
+    document.getElementById('loadingState').classList.add('visible');
+    startLoadingMessages();
+
+    const payload = {
+      description:    desc,
+      platform:       selectedPlatforms.length ? selectedPlatforms.join(', ') : undefined,
+      app_version:    document.getElementById('version').value.trim() || undefined,
+      environment:    document.getElementById('env').value || undefined,
+      frequency:      document.getElementById('freq').value || undefined,
+      affected_users: document.getElementById('affected').value.trim() || undefined,
+      component:      document.getElementById('component').value.trim() || undefined,
+      screenshots:    attachedImages.map(i => i.dataUrl), // base64 strings
+    };
+
+    try {
+      const res = await fetch('/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        // FastAPI validation errors trả về array
+        if (Array.isArray(err.detail)) {
+          const messages = err.detail.map(e => {
+            const field = e.loc?.slice(1).join('.') || 'input';
+            return `${field}: ${e.msg}`;
+          });
+          throw new Error(messages.join(' | '));
+        }
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      renderResult(data, desc, payload);
+      addHistory(data, desc, payload);
+    } catch (e) {
+      showError(`Lỗi: ${e.message}`);
+    } finally {
+      stopLoadingMessages();
+      document.getElementById('loadingState').classList.remove('visible');
+      analyzing = false;
+      btn.disabled = false;
+      document.getElementById('btnText').textContent = 'Phân tích bug';
+    }
+  }
+
+  // ── Render result ─────────────────────────────────────────────────────────
+  function renderResult(data, desc, payload) {
+    document.getElementById('rDesc').textContent = desc.length > 120 ? desc.slice(0,120)+'…' : desc;
+
+    const rp = document.getElementById('rPriority');
+    rp.textContent = data.priority; rp.className = `badge ${data.priority}`;
+    const rs = document.getElementById('rSeverity');
+    rs.textContent = data.severity; rs.className = `badge ${data.severity}`;
+
+    // Context tags
+    const tags = [];
+    if (payload?.platform) tags.push(`🖥 ${payload.platform}`);
+    if (payload?.app_version) tags.push(`v${payload.app_version}`);
+    if (payload?.environment) tags.push(`🌍 ${payload.environment}`);
+    if (payload?.frequency) {
+      const fmap = { always:'100%', often:'~70%', sometimes:'~30%', rare:'~5%' };
+      tags.push(`🔁 ${fmap[payload.frequency] || payload.frequency}`);
+    }
+    if (payload?.component) tags.push(`⚙ ${payload.component}`);
+    document.getElementById('rTags').innerHTML = tags.map(t => `<span class="result-tag">${t}</span>`).join('');
+
+    // Priority
+    const pc = PRIORITY_COLORS[data.priority] || '#4f7ef8';
+    document.getElementById('sPriority').textContent = data.priority;
+    document.getElementById('sPriority').style.color = pc;
+    document.getElementById('sPriorityLabel').textContent = data.priority_label;
+    document.getElementById('sPriorityBar').style.width = data.priority_score + '%';
+    document.getElementById('sPriorityBar').style.background = pc;
+    document.getElementById('sPriorityScore').textContent = `Điểm: ${data.priority_score}/100`;
+
+    // Severity
+    const sc = SEVERITY_COLORS[data.severity] || '#4f7ef8';
+    document.getElementById('sSeverity').textContent = data.severity;
+    document.getElementById('sSeverity').style.color = sc;
+    document.getElementById('sSeverityLabel').textContent = data.severity_label;
+    document.getElementById('sSeverityBar').style.width = data.severity_score + '%';
+    document.getElementById('sSeverityBar').style.background = sc;
+    document.getElementById('sSeverityScore').textContent = `Điểm: ${data.severity_score}/100`;
+
+    // Confidence
+    document.getElementById('sConf').textContent = data.confidence + '%';
+    document.getElementById('sConfBar').style.width = data.confidence + '%';
+
+    // Screenshots
+    const screenshots = payload?.screenshots || [];
+    const screenshotCard = document.getElementById('screenshotCard');
+    if (screenshots.length) {
+      document.getElementById('sScreenshots').innerHTML = screenshots.map(src =>
+        `<img src="${src}" alt="screenshot" onclick="openLightbox('${src}')" />`
+      ).join('');
+      screenshotCard.style.display = 'block';
+    } else {
+      screenshotCard.style.display = 'none';
+    }
+
+    document.getElementById('sReason').textContent = data.reason;
+    document.getElementById('sFactors').innerHTML = (data.factors||[]).map(f=>`<span class="tag">${esc(f)}</span>`).join('');
+    document.getElementById('sActions').innerHTML = (data.actions||[]).map((a,i)=>
+      `<li><span class="action-num">${i+1}</span><span>${esc(a)}</span></li>`
+    ).join('');
+
+    // Priority / Severity reason riêng
+    document.getElementById('sPriorityReason').textContent = data.priority_reason || '';
+    document.getElementById('sSeverityReason').textContent = data.severity_reason || '';
+
+    // Root causes
+    const rcs = data.root_causes || [];
+    const rcCard = document.getElementById('rootCauseCard');
+    if (rcs.length) {
+      document.getElementById('sRootCauses').innerHTML = rcs.map((rc, i) => `
+        <li class="rc-item">
+          <span class="rc-num">${i+1}</span>
+          <div class="rc-body">
+            <div class="rc-cause">${esc(rc.cause || '')}</div>
+            ${rc.check ? `<div class="rc-check">${esc(rc.check)}</div>` : ''}
+          </div>
+        </li>`).join('');
+      rcCard.style.display = 'block';
+    } else {
+      rcCard.style.display = 'none';
+    }
+
+    // Test cases
+    const tc = data.test_cases || {};
+    const groups = [
+      { key: 'must_have',   cls: 'tc-must',   label: 'Must have',   hint: 'bắt buộc verify fix' },
+      { key: 'should_have', cls: 'tc-should', label: 'Should have', hint: 'nên test thêm' },
+      { key: 'regression',  cls: 'tc-reg',    label: 'Regression',  hint: 'chống tái phát' },
+    ];
+    const tcCard = document.getElementById('testCaseCard');
+    const hasTc = groups.some(g => (tc[g.key] || []).length);
+    if (hasTc) {
+      document.getElementById('sTestCases').innerHTML = groups
+        .filter(g => (tc[g.key] || []).length)
+        .map(g => `
+          <div class="tc-group ${g.cls}">
+            <div class="tc-head">
+              <span class="tc-pill">${g.label}</span>
+              <span class="tc-hint">${g.hint}</span>
+            </div>
+            <ul class="tc-list">
+              ${tc[g.key].map(c => `<li><span>${esc(c)}</span></li>`).join('')}
+            </ul>
+          </div>`).join('');
+      tcCard.style.display = 'block';
+    } else {
+      tcCard.style.display = 'none';
+    }
+
+    document.getElementById('resultPanel').classList.add('visible');
+  }
+
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  function showError(msg) {
+    const box = document.getElementById('errorBox');
+    box.textContent = msg; box.classList.add('visible');
+    document.getElementById('emptyState').style.display = 'none';
+  }
+
+  function addHistory(data, desc, payload) {
+    history.unshift({ data, desc, payload });
+    if (history.length > 20) history.pop();
+    renderHistory();
+  }
+
+  function renderHistory() {
+    const list = document.getElementById('histList');
+    const label = document.getElementById('histLabel');
+    if (!history.length) { label.style.display = 'none'; list.innerHTML = ''; return; }
+    label.style.display = 'block';
+    list.innerHTML = history.map((h, i) => {
+      const meta = [h.payload?.platform, h.payload?.app_version ? `v${h.payload.app_version}` : null]
+        .filter(Boolean).join(' · ');
+      return `<div class="history-item ${i===0?'active':''}" onclick="loadHistory(${i})">
+        <div class="hi-top">
+          <span class="badge ${h.data.priority}">${h.data.priority}</span>
+          <span class="badge ${h.data.severity}">${h.data.severity}</span>
+        </div>
+        <div class="hi-desc">${h.desc.slice(0,60)}${h.desc.length>60?'…':''}</div>
+        ${meta ? `<div class="hi-meta">${meta}</div>` : ''}
+      </div>`;
+    }).join('');
+  }
+
+  function loadHistory(idx) {
+    const h = history[idx];
+    if (!h) return;
+    document.getElementById('emptyState').style.display = 'none';
+    document.getElementById('loadingState').classList.remove('visible');
+    renderResult(h.data, h.desc, h.payload);
+    document.querySelectorAll('.history-item').forEach((el, i) => el.classList.toggle('active', i===idx));
+  }
+
+  document.getElementById('desc').addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') analyze();
+  });
+</script>
+
+</body>
+</html>

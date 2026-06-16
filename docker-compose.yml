@@ -1,0 +1,9 @@
+services:
+  api:
+    build: .
+    ports:
+      - "${PORT:-8080}:${PORT:-8080}"
+    environment:
+      - VNGCLOUD_API_KEY=${VNGCLOUD_API_KEY}
+      - PORT=${PORT:-8080}
+    restart: unless-stopped
